@@ -1,28 +1,34 @@
 import cv2
 import numpy as np
 
+from numba import njit
 from numpy.fft import fft2
 from numpy.fft import ifft2
 
 from .subpixel_translation import subpix_translation
 
 
+@njit
 def __l2_norm_squared(matrix):
     return np.sum(np.square(matrix))
 
 
+@njit
 def __l1_norm(matrix):
     return np.sum(np.abs(matrix))
 
 
+@njit
 def l1_displacement(ref_tile, alternate_tile):
     return __compute_displacement(ref_tile, alternate_tile, __l1_norm)
 
 
+@njit
 def l2_displacement(ref_tile, alternate_tile):
     return __compute_displacement(ref_tile, alternate_tile, __l2_norm_squared)
 
-    
+
+@njit
 def __compute_displacement(ref_tile, alternate_tile, norm_callback):
     ref_h, ref_w = ref_tile.shape
     alt_h, alt_w = alternate_tile.shape
@@ -32,7 +38,6 @@ def __compute_displacement(ref_tile, alternate_tile, norm_callback):
 
     displacement = np.zeros((disp_h, disp_w))
 
-    #TODO: can we perform this calculations in parallel?
     for h in range(disp_h):
         for w in range(disp_w):
             diff = ref_tile - alternate_tile[h:h + ref_h, w:w + ref_w]
@@ -46,6 +51,7 @@ def l2_displacement_fast(ref_tile, alternate_tile):
     pass
 
 
+@njit
 def __alternate_image_slice_coarser(start, end, margin, right_limit, left_limit=0):
     start = start - margin
     end = end + margin
@@ -61,6 +67,7 @@ def __alternate_image_slice_coarser(start, end, margin, right_limit, left_limit=
     return start, end, clip
 
 
+@njit
 def __alternate_image_slice(start, end, coarser_alignment, margin, right_limit, left_limit=0):
     if coarser_alignment is not None:
         start += coarser_alignment
@@ -84,16 +91,12 @@ def alignment(
 
     margin = search_level
 
-    print("Search level: {}".format(search_level))
-
     alignments = np.zeros((height_steps, width_steps, 2), dtype=np.int16)
 
     height_slice = lambda start, end, coarser_alignment: __alternate_image_slice(
         start, end, coarser_alignment, margin, height_ref)
     width_slice = lambda start, end, coarser_alignment: __alternate_image_slice(
         start, end, coarser_alignment, margin, width_ref)
-
-    print("Alignment Horizontal steps: {}, vertical steps: {}".format(width_steps, height_steps))
 
     width_shift, height_shift = None, None
 
@@ -158,17 +161,16 @@ def l1_alignment(ref_frame, alternate_frame, tile_size, search_level, \
         coarser_alignment, l1_displacement)
 
 
+@njit
 def get_coarser_neighbor_alignments(
     coarser_alignments, height_step, width_step, downsample_factor, tile_ratio):
-
-    #print("coarser alignments dtype: {}".format(coarser_alignments.dtype))
 
     alignment_height, alignment_width, _ = coarser_alignments.shape
 
     tile_scale = downsample_factor // tile_ratio
 
-    coarser_hs = np.floor(height_step / tile_scale).astype(np.int16)
-    coarser_ws = np.floor(width_step / tile_scale).astype(np.int16)
+    coarser_hs = int(np.floor(height_step / tile_scale))
+    coarser_ws = int(np.floor(width_step / tile_scale))
 
     pos_h = height_step % tile_scale
     pos_w = width_step % tile_scale
@@ -198,6 +200,7 @@ def get_coarser_neighbor_alignments(
     return init_alignments
 
 
+@njit
 def __l1_residual(first, second):
     return np.sum(np.abs(first - second))
 
@@ -218,9 +221,6 @@ def compute_coarser_init_alignment(
     init_alignments = np.zeros((height_steps, width_steps, 2), dtype=np.int16)
 
     tile_ratio = tile_size // coarser_tile_size
-
-    print("Total tiles: {}".format(height_steps * width_steps))
-    print("Init Horizontal steps: {}, vertical steps: {}".format(width_steps, height_steps))
 
     for hs in range(height_steps):
         for ws in range(width_steps):
@@ -260,8 +260,6 @@ def compute_coarser_init_alignment(
 
             init_alignments[hs, ws] = min_alignment
 
-    print("Init alignment shape: {}".format(init_alignments.shape))
-
     return init_alignments
 
 
@@ -274,8 +272,9 @@ def average_bayer_raw(frame):
 
     out_height = height // 2
     out_width = width // 2
-    
-    out = np.reshape(frame, (out_height, 2, out_width, 2)).astype(np.float32)
+ 
+    out = frame.reshape((out_height, 2, out_width, 2))
+    out = out.astype(np.float32)
     out = np.sum(np.sum(out, axis=-1), -2) / 4
 
     return out
@@ -294,16 +293,12 @@ def hierarchical_image_alignment(ref_frame, alt_frame):
 
     assert ref_frame.shape == alt_frame.shape
 
-    print("After averaging shape: {}".format(ref_frame.shape))
-
     ref_pyramid = [ref_frame]
     alt_pyramid = [alt_frame]
 
     for idx, factor in enumerate([2, 4, 4]):
         ref_upper_lvl = __downsample(ref_pyramid[-1], factor)
         alt_upper_lvl = __downsample(alt_pyramid[-1], factor)
-
-        print("Level: {}, shape: {}".format(idx + 1, ref_upper_lvl.shape))
 
         ref_pyramid.append(ref_upper_lvl)
         alt_pyramid.append(alt_upper_lvl)
