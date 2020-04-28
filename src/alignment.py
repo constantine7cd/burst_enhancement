@@ -84,12 +84,16 @@ def alignment(
 
     margin = search_level
 
+    print("Search level: {}".format(search_level))
+
     alignments = np.zeros((height_steps, width_steps, 2), dtype=np.int16)
 
     height_slice = lambda start, end, coarser_alignment: __alternate_image_slice(
         start, end, coarser_alignment, margin, height_ref)
     width_slice = lambda start, end, coarser_alignment: __alternate_image_slice(
         start, end, coarser_alignment, margin, width_ref)
+
+    print("Alignment Horizontal steps: {}, vertical steps: {}".format(width_steps, height_steps))
 
     width_shift, height_shift = None, None
 
@@ -107,7 +111,6 @@ def alignment(
             if coarser_level_alignment is not None:
                 height_shift, width_shift = coarser_level_alignment[hs, ws]
 
-
             start_h_alt, end_h_alt, clip_h = height_slice(start_h, end_h, height_shift)
             start_w_alt, end_w_alt, clip_w = width_slice(start_w, end_w, width_shift)
             
@@ -121,9 +124,16 @@ def alignment(
             # were based on absolute coordinates, where (0,0) is upper left corner
             # of alternate image. Final alignments should be centered with respect
             # to margin and clip values.
+            assert alignment_h >= 0, "Alignment after subpix translation should be >=0"
+            assert alignment_w >= 0, "Alignment after subpix translation should be >=0"
+
             alignment_h -= margin
             alignment_w -= margin
 
+            if height_shift is not None:
+                alignment_h += height_shift
+                alignment_w += width_shift
+    
             if clip_h is not None:
                 alignment_h += clip_h
             if clip_w is not None:
@@ -151,12 +161,14 @@ def l1_alignment(ref_frame, alternate_frame, tile_size, search_level, \
 def get_coarser_neighbor_alignments(
     coarser_alignments, height_step, width_step, downsample_factor, tile_ratio):
 
+    #print("coarser alignments dtype: {}".format(coarser_alignments.dtype))
+
     alignment_height, alignment_width, _ = coarser_alignments.shape
 
     tile_scale = downsample_factor // tile_ratio
 
-    coarser_hs = np.floor(height_step / tile_scale).astype(np.int32)
-    coarser_ws = np.floor(width_step / tile_scale).astype(np.int32)
+    coarser_hs = np.floor(height_step / tile_scale).astype(np.int16)
+    coarser_ws = np.floor(width_step / tile_scale).astype(np.int16)
 
     pos_h = height_step % tile_scale
     pos_w = width_step % tile_scale
@@ -207,9 +219,11 @@ def compute_coarser_init_alignment(
 
     tile_ratio = tile_size // coarser_tile_size
 
+    print("Total tiles: {}".format(height_steps * width_steps))
+    print("Init Horizontal steps: {}, vertical steps: {}".format(width_steps, height_steps))
+
     for hs in range(height_steps):
         for ws in range(width_steps):
-
             start_h = hs * tile_size
             end_h = start_h + tile_size
 
@@ -241,11 +255,12 @@ def compute_coarser_init_alignment(
 
             # Adding to init alignments the alignment with min l1 residual
             l1_residuals = np.array(l1_residuals)
-            argmin = np.argmin(l1_residual)
+            argmin = np.argmin(l1_residuals)
             min_alignment = alignments[argmin]
 
             init_alignments[hs, ws] = min_alignment
 
+    print("Init alignment shape: {}".format(init_alignments.shape))
 
     return init_alignments
 
@@ -279,12 +294,16 @@ def hierarchical_image_alignment(ref_frame, alt_frame):
 
     assert ref_frame.shape == alt_frame.shape
 
+    print("After averaging shape: {}".format(ref_frame.shape))
+
     ref_pyramid = [ref_frame]
     alt_pyramid = [alt_frame]
 
     for idx, factor in enumerate([2, 4, 4]):
         ref_upper_lvl = __downsample(ref_pyramid[-1], factor)
         alt_upper_lvl = __downsample(alt_pyramid[-1], factor)
+
+        print("Level: {}, shape: {}".format(idx + 1, ref_upper_lvl.shape))
 
         ref_pyramid.append(ref_upper_lvl)
         alt_pyramid.append(alt_upper_lvl)
@@ -302,7 +321,6 @@ def hierarchical_image_alignment(ref_frame, alt_frame):
 
         coarser_alignment = compute_coarser_init_alignment(
             ref_pyramid[i-1], tiles[i-1], alt_pyramid[i-1], alignments, tiles[i], ds_factors[i-1])
-
 
     final_alignment = alignment_funcs[0](
         ref_pyramid[0], alt_pyramid[0], tiles[0], search_lvls[0], coarser_alignment)
