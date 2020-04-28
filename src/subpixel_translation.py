@@ -12,8 +12,8 @@ def subpix_translation(displacement):
 
     argmin = np.argmin(displacement)
 
-    min_row = argmin // d_w
-    min_column = argmin % d_w
+    min_row = (argmin // d_w).astype(np.int16)
+    min_column = (argmin % d_w).astype(np.int16)
 
     cond = np.array(
         [min_row == 0, 
@@ -40,13 +40,13 @@ def subpix_translation(displacement):
     detA = A_11 * A_22 - np.square(A_12)
 
     ds_w = -(A_22 * b_1 - A_12 * b_2) / detA
-    ds_w = round(ds_w)
+    ds_w = np.round(ds_w).astype(np.int16)
 
     if ds_w * ds_w > 1:
         return min_row, min_column
 
     ds_h = -(A_11 * b_2 - A_12 * b_1) / detA
-    ds_h = round(ds_h)
+    ds_h = np.round(ds_h).astype(np.int16)
 
     if ds_h * ds_h > 1:
         return min_row, min_column
