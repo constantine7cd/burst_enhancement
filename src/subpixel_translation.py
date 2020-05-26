@@ -39,23 +39,22 @@ def subpix_translation(displacement):
 
     detA = A_11 * A_22 - np.square(A_12)
 
+    if abs(detA) < 1e-6:
+        return min_row, min_column
+
     ds_w = -(A_22 * b_1 - A_12 * b_2) / detA
     ds_w = np.round(ds_w).astype(np.int16)
 
-    if ds_w * ds_w > 1:
+    if abs(ds_w) > 1:
         return min_row, min_column
 
     ds_h = -(A_11 * b_2 - A_12 * b_1) / detA
     ds_h = np.round(ds_h).astype(np.int16)
 
-    if ds_h * ds_h > 1:
+    if abs(ds_h) > 1:
         return min_row, min_column
 
     ds_h += min_row
     ds_w += min_column
 
     return ds_h, ds_w
-    
-
-
-
