@@ -1,10 +1,16 @@
+# IDE and code redactors
 .vscode
+.idea
 
 # apple
 .DS_Store
 
 # Raw images
 *.dng
+*.profraw
+
+# Pytorch
+*.pth
 
 # Jupyter
 *.ipynb
