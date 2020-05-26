@@ -1,3 +1,10 @@
+"""
+## CycleISP: Real Image Restoration Via Improved Data Synthesis
+## Syed Waqas Zamir, Aditya Arora, Salman Khan, Munawar Hayat, Fahad Shahbaz Khan, Ming-Hsuan Yang, and Ling Shao
+## CVPR 2020
+## https://arxiv.org/abs/2003.07761
+"""
+
 from collections import OrderedDict
 
 import torch
